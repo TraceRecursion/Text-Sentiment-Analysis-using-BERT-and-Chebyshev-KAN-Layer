@@ -1,14 +1,11 @@
-from transformers import AutoTokenizer, AutoModelForSequenceClassification, Trainer, TrainingArguments, pipeline
-from datasets import load_dataset
-import pandas as pd
-import numpy as np
-import seaborn as sn
 import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+from datasets import load_dataset
+from transformers import AutoTokenizer, AutoModelForSequenceClassification, Trainer, TrainingArguments
+
 plt.switch_backend('agg')
-from sklearn.metrics import roc_auc_score, f1_score, confusion_matrix
-from sklearn.model_selection import train_test_split
-import torch
-from pprint import pprint
+from sklearn.metrics import f1_score
 
 # 读取文件
 df = pd.read_csv('test.csv', encoding='gbk')
@@ -32,7 +29,7 @@ raw_datasets = load_dataset('csv', data_files='data.csv')  # 加载训练的数�
 
 split = raw_datasets['train'].train_test_split(test_size=0.3, seed=42)  # 分隔为数据集和测试集 测试集占百分之30
 
-tokenizer = AutoTokenizer.from_pretrained('bert-base-chinese')
+tokenizer = AutoTokenizer.from_pretrained('model/bert-base-chinese', local_files_only=True)
 
 
 def tokenize_fn(batch):
@@ -41,7 +38,8 @@ def tokenize_fn(batch):
 
 tokenized_datasets = split.map(tokenize_fn, batched=True)
 
-model = AutoModelForSequenceClassification.from_pretrained('bert-base-chinese', num_labels=3)
+model = AutoModelForSequenceClassification.from_pretrained('model/bert-base-chinese', num_labels=3,
+                                                           local_files_only=True)
 
 training_args = TrainingArguments(
     output_dir='training_dir',  # 输出文件夹
