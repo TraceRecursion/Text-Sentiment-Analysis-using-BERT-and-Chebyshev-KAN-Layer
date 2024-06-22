@@ -1,11 +1,13 @@
 import matplotlib.pyplot as plt
-import torch
-import torch.nn as nn
 import numpy as np
 import pandas as pd
+import torch
+import torch.nn as nn
 from datasets import load_dataset
 from sklearn.metrics import f1_score
-from transformers import AutoTokenizer, AutoModelForSequenceClassification, Trainer, TrainingArguments, BertModel, BertPreTrainedModel, DataCollatorWithPadding
+from transformers import AutoTokenizer, Trainer, TrainingArguments, BertModel, \
+    BertPreTrainedModel, DataCollatorWithPadding
+
 # 设置 matplotlib 后端为 'agg'，使其可以在非GUI环境下运行
 plt.switch_backend('agg')
 
@@ -33,6 +35,7 @@ class ChebyshevKANLayer(nn.Module):
 
 class BertWithChebyshevKAN(BertPreTrainedModel):
     """创建一个新的BERT模型类，将标准的输出层替换为KAN层"""
+
     def __init__(self, config, degree=3):
         super(BertWithChebyshevKAN, self).__init__(config)
         self.num_labels = config.num_labels  # 确保num_labels从config中正确设置
@@ -69,7 +72,8 @@ def custom_collate_fn(batch):
     data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
 
     # 此处我们假设 'batch' 是一个列表，其中包含多个字典，每个字典都有 'input_ids'、'attention_mask' 和 'label'
-    collated_data = data_collator([{"input_ids": item["input_ids"], "attention_mask": item["attention_mask"]} for item in batch])
+    collated_data = data_collator(
+        [{"input_ids": item["input_ids"], "attention_mask": item["attention_mask"]} for item in batch])
     labels = torch.tensor([item["label"] for item in batch], dtype=torch.long)
     collated_data['labels'] = labels
     return collated_data
@@ -77,9 +81,11 @@ def custom_collate_fn(batch):
 
 def tokenize_data(dataset, tokenizer):
     """使用tokenizer对数据集进行处理"""
+
     def tokenize_fn(batch):
         # 启用截断和填充确保所有序列长度一致
         return tokenizer(batch['sentence'], truncation=True, padding=True, max_length=512, return_tensors='pt')
+
     return dataset.map(tokenize_fn, batched=True)
 
 
@@ -126,10 +132,6 @@ def main():
 
     tokenizer = AutoTokenizer.from_pretrained('model/bert-base-chinese', local_files_only=True)
     tokenized_datasets = tokenize_data(train_test_split, tokenizer)
-    print("Tokenized sample:", tokenized_datasets["train"][0])
-
-    # 添加打印语句来检查数据
-    print("Sample data:", tokenized_datasets["train"][0])
 
     model = BertWithChebyshevKAN.from_pretrained(
         'model/bert-base-chinese',
@@ -162,6 +164,7 @@ def main():
 
     trainer.train()
     plot_metrics(trainer.state.log_history)
+
 
 if __name__ == "__main__":
     main()
