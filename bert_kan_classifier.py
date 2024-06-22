@@ -38,7 +38,7 @@ class BertWithChebyshevKAN(BertPreTrainedModel):
 
     def __init__(self, config, degree=3):
         super(BertWithChebyshevKAN, self).__init__(config)
-        self.num_labels = config.num_labels  # 确保num_labels从config中正确设置
+        self.num_labels = config.num_labels
         self.bert = BertModel(config)
         self.kan_layer = ChebyshevKANLayer(config.hidden_size, self.num_labels, degree)
 
@@ -47,13 +47,14 @@ class BertWithChebyshevKAN(BertPreTrainedModel):
         sequence_output = outputs[1]  # 使用CLS标记的输出
         logits = self.kan_layer(sequence_output)
 
-        # 计算损失，如果labels被提供
-        loss = None
-        if labels is not None:
-            loss_fct = nn.CrossEntropyLoss()
-            loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1))
+        # 如果没有提供labels，直接返回logits
+        if labels is None:
+            return {'logits': logits}
 
-        return (loss, logits) if loss is not None else logits
+        # 如果提供了labels，计算并返回损失和logits
+        loss_fct = nn.CrossEntropyLoss()
+        loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1))
+        return {'loss': loss, 'logits': logits}
 
 
 def load_and_prepare_data(filename):
