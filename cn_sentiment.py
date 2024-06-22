@@ -24,7 +24,8 @@ def tokenize_data(dataset, tokenizer):
     """使用tokenizer对数据集进行处理"""
 
     def tokenize_fn(batch):
-        return tokenizer(batch['sentence'], truncation=True)
+        # 添加max_length参数并确保启用截断
+        return tokenizer(batch['sentence'], truncation=True, max_length=512)  # 这里假设最大长度设置为512
 
     return dataset.map(tokenize_fn, batched=True)
 
