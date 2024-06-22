@@ -60,7 +60,7 @@ def plot_metrics(training_history):
     plt.legend()
 
     plt.tight_layout()
-    plt.savefig('training_dir/metrics_plot.png')
+    plt.savefig('training_basic-bert/metrics_plot.png')
     plt.close()
 
 
@@ -75,7 +75,7 @@ def main():
         'model/bert-base-chinese', num_labels=3, local_files_only=True)
 
     training_args = TrainingArguments(
-        output_dir='training_dir',
+        output_dir='training_basic-bert',
         eval_strategy='epoch',
         save_strategy='epoch',
         num_train_epochs=30,

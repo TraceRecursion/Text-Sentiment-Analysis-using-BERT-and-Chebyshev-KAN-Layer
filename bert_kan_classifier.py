@@ -122,7 +122,7 @@ def plot_metrics(training_history):
     plt.legend()
 
     plt.tight_layout()
-    plt.savefig('training_dir/metrics_plot.png')
+    plt.savefig('training_bert-kan/metrics_plot.png')
     plt.close()
 
 
@@ -141,7 +141,7 @@ def main():
     )
 
     training_args = TrainingArguments(
-        output_dir='training_dir',
+        output_dir='training_bert-kan',
         eval_strategy='epoch',
         save_strategy='epoch',
         num_train_epochs=30,
