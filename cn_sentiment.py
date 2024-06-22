@@ -5,7 +5,7 @@ from datasets import load_dataset
 from sklearn.metrics import f1_score
 from transformers import AutoTokenizer, AutoModelForSequenceClassification, Trainer, TrainingArguments
 
-# 设置 matplotlib 后端
+# 设置 matplotlib 后端为 'agg'，使其可以在非GUI环境下运行
 plt.switch_backend('agg')
 
 
@@ -22,11 +22,8 @@ def load_and_prepare_data(filename):
 
 def tokenize_data(dataset, tokenizer):
     """使用tokenizer对数据集进行处理"""
-
     def tokenize_fn(batch):
-        # 添加max_length参数并确保启用截断
-        return tokenizer(batch['sentence'], truncation=True, max_length=512)  # 这里假设最大长度设置为512
-
+        return tokenizer(batch['sentence'], truncation=True, max_length=512)
     return dataset.map(tokenize_fn, batched=True)
 
 
@@ -37,6 +34,34 @@ def compute_metrics(eval_pred):
     acc = np.mean(predictions == labels)
     f1 = f1_score(labels, predictions, average='macro')
     return {'accuracy': acc, 'f1': f1}
+
+
+def plot_metrics(training_history):
+    """绘制训练过程中的指标变化"""
+    eval_epochs = [x['epoch'] for x in training_history if 'eval_loss' in x]
+    eval_accuracy = [x['eval_accuracy'] for x in training_history if 'eval_accuracy' in x]
+    eval_f1 = [x['eval_f1'] for x in training_history if 'eval_f1' in x]
+    eval_loss = [x['eval_loss'] for x in training_history if 'eval_loss' in x]
+
+    plt.figure(figsize=(12, 6))
+    plt.subplot(1, 2, 1)
+    plt.plot(eval_epochs, eval_accuracy, label='Accuracy')
+    plt.plot(eval_epochs, eval_f1, label='F1 Score')
+    plt.title('Evaluation Metrics Over Epochs')
+    plt.xlabel('Epoch')
+    plt.ylabel('Value')
+    plt.legend()
+
+    plt.subplot(1, 2, 2)
+    plt.plot(eval_epochs, eval_loss, label='Loss')
+    plt.title('Loss Over Epochs')
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.legend()
+
+    plt.tight_layout()
+    plt.savefig('training_dir/metrics_plot.png')
+    plt.close()
 
 
 def main():
@@ -53,11 +78,12 @@ def main():
         output_dir='training_dir',
         eval_strategy='epoch',
         save_strategy='epoch',
-        num_train_epochs=3,
+        num_train_epochs=30,
         per_device_train_batch_size=16,
         per_device_eval_batch_size=64,
         logging_dir='logs',
-        logging_strategy='epoch'
+        logging_strategy='epoch',
+        load_best_model_at_end=True
     )
 
     trainer = Trainer(
@@ -70,7 +96,7 @@ def main():
     )
 
     trainer.train()
-
+    plot_metrics(trainer.state.log_history)  # 绘制并保存训练指标图
 
 if __name__ == "__main__":
     main()
