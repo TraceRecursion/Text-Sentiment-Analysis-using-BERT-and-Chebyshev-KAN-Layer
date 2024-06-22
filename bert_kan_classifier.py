@@ -1,12 +1,56 @@
 import matplotlib.pyplot as plt
+import torch
+import torch.nn as nn
 import numpy as np
 import pandas as pd
 from datasets import load_dataset
 from sklearn.metrics import f1_score
-from transformers import AutoTokenizer, AutoModelForSequenceClassification, Trainer, TrainingArguments
-
+from transformers import AutoTokenizer, AutoModelForSequenceClassification, Trainer, TrainingArguments, BertModel, BertPreTrainedModel, DataCollatorWithPadding
 # 设置 matplotlib 后端为 'agg'，使其可以在非GUI环境下运行
 plt.switch_backend('agg')
+
+
+class ChebyshevKANLayer(nn.Module):
+    def __init__(self, input_dim, output_dim, degree):
+        super(ChebyshevKANLayer, self).__init__()
+        self.coeffs = nn.Parameter(torch.randn(output_dim, input_dim, degree + 1))
+        self.degree = degree
+
+    def forward(self, x):
+        x_norm = torch.tanh(x)  # [-1, 1]范围内的正则化
+        # 初始的多项式
+        Tx = [torch.ones_like(x_norm), x_norm]
+        for n in range(2, self.degree + 1):
+            Tx.append(2 * x_norm * Tx[-1] - Tx[-2])
+        T_stack = torch.stack(Tx, dim=-1)  # [batch_size, input_dim, degree+1]
+        T_stack = T_stack.permute(0, 2, 1)  # 调整为 [batch_size, degree+1, input_dim]
+
+        # 调整 self.coeffs 的形状以匹配 T_stack
+        coeffs_adjusted = self.coeffs.permute(0, 2, 1)  # [output_dim, degree+1, input_dim]
+        logits = torch.einsum('bdi,odi->bo', T_stack, coeffs_adjusted)
+        return logits
+
+
+class BertWithChebyshevKAN(BertPreTrainedModel):
+    """创建一个新的BERT模型类，将标准的输出层替换为KAN层"""
+    def __init__(self, config, degree=3):
+        super(BertWithChebyshevKAN, self).__init__(config)
+        self.num_labels = config.num_labels  # 确保num_labels从config中正确设置
+        self.bert = BertModel(config)
+        self.kan_layer = ChebyshevKANLayer(config.hidden_size, self.num_labels, degree)
+
+    def forward(self, input_ids, attention_mask=None, token_type_ids=None, labels=None):
+        outputs = self.bert(input_ids, attention_mask=attention_mask, token_type_ids=token_type_ids)
+        sequence_output = outputs[1]  # 使用CLS标记的输出
+        logits = self.kan_layer(sequence_output)
+
+        # 计算损失，如果labels被提供
+        loss = None
+        if labels is not None:
+            loss_fct = nn.CrossEntropyLoss()
+            loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1))
+
+        return (loss, logits) if loss is not None else logits
 
 
 def load_and_prepare_data(filename):
@@ -20,10 +64,22 @@ def load_and_prepare_data(filename):
     return load_dataset('csv', data_files='data.csv')
 
 
+def custom_collate_fn(batch):
+    tokenizer = AutoTokenizer.from_pretrained('model/bert-base-chinese', local_files_only=True)
+    data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
+
+    # 此处我们假设 'batch' 是一个列表，其中包含多个字典，每个字典都有 'input_ids'、'attention_mask' 和 'label'
+    collated_data = data_collator([{"input_ids": item["input_ids"], "attention_mask": item["attention_mask"]} for item in batch])
+    labels = torch.tensor([item["label"] for item in batch], dtype=torch.long)
+    collated_data['labels'] = labels
+    return collated_data
+
+
 def tokenize_data(dataset, tokenizer):
     """使用tokenizer对数据集进行处理"""
     def tokenize_fn(batch):
-        return tokenizer(batch['sentence'], truncation=True, max_length=512)
+        # 启用截断和填充确保所有序列长度一致
+        return tokenizer(batch['sentence'], truncation=True, padding=True, max_length=512, return_tensors='pt')
     return dataset.map(tokenize_fn, batched=True)
 
 
@@ -70,9 +126,17 @@ def main():
 
     tokenizer = AutoTokenizer.from_pretrained('model/bert-base-chinese', local_files_only=True)
     tokenized_datasets = tokenize_data(train_test_split, tokenizer)
+    print("Tokenized sample:", tokenized_datasets["train"][0])
 
-    model = AutoModelForSequenceClassification.from_pretrained(
-        'model/bert-base-chinese', num_labels=3, local_files_only=True)
+    # 添加打印语句来检查数据
+    print("Sample data:", tokenized_datasets["train"][0])
+
+    model = BertWithChebyshevKAN.from_pretrained(
+        'model/bert-base-chinese',
+        num_labels=3,
+        local_files_only=True,
+        degree=3
+    )
 
     training_args = TrainingArguments(
         output_dir='training_dir',
@@ -92,11 +156,12 @@ def main():
         train_dataset=tokenized_datasets["train"],
         eval_dataset=tokenized_datasets["test"],
         tokenizer=tokenizer,
-        compute_metrics=compute_metrics
+        compute_metrics=compute_metrics,
+        data_collator=custom_collate_fn  # 使用自定义 collate_fn
     )
 
     trainer.train()
-    plot_metrics(trainer.state.log_history)  # 绘制并保存训练指标图
+    plot_metrics(trainer.state.log_history)
 
 if __name__ == "__main__":
     main()
