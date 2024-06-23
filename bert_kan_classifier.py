@@ -8,8 +8,33 @@ from sklearn.metrics import f1_score
 from transformers import AutoTokenizer, Trainer, TrainingArguments, BertModel, \
     BertPreTrainedModel, DataCollatorWithPadding
 
-# 设置 matplotlib 后端为 'agg'，使其可以在非GUI环境下运行
+
 plt.switch_backend('agg')
+
+
+class Config:
+    # 数据处理
+    data_file = 'test.csv'
+    encoding = 'gbk'
+    target_map = {'positive': 1, 'negative': 0, 'neutral': 2}
+
+    # 模型参数
+    model_path = 'model/bert-base-chinese'
+    local_files_only = True
+    num_labels = 3
+    degree = 3
+
+    # 训练参数
+    output_dir = 'training_bert-kan'
+    eval_strategy = 'epoch'
+    save_strategy = 'epoch'
+    num_train_epochs = 30
+    per_device_train_batch_size = 16
+    per_device_eval_batch_size = 64
+    logging_dir = 'logs'
+    logging_strategy = 'epoch'
+    test_size = 0.3
+    random_seed = 42
 
 
 class ChebyshevKANLayer(nn.Module):
@@ -128,31 +153,39 @@ def plot_metrics(training_history):
 
 
 def main():
-    raw_datasets = load_and_prepare_data('test.csv')
-    train_test_split = raw_datasets['train'].train_test_split(test_size=0.3, seed=42)
+    # 初始化配置对象
+    config = Config()
 
-    tokenizer = AutoTokenizer.from_pretrained('model/bert-base-chinese', local_files_only=True)
+    # 加载和准备数据
+    raw_datasets = load_and_prepare_data(config.data_file)
+    train_test_split = raw_datasets['train'].train_test_split(test_size=config.test_size, seed=config.random_seed)
+
+    # 初始化Tokenizer和处理数据
+    tokenizer = AutoTokenizer.from_pretrained(config.model_path, local_files_only=config.local_files_only)
     tokenized_datasets = tokenize_data(train_test_split, tokenizer)
 
+    # 加载预训练模型并添加自定义层
     model = BertWithChebyshevKAN.from_pretrained(
-        'model/bert-base-chinese',
-        num_labels=3,
-        local_files_only=True,
-        degree=3
+        config.model_path,
+        num_labels=config.num_labels,
+        local_files_only=config.local_files_only,
+        degree=config.degree
     )
 
+    # 配置训练参数
     training_args = TrainingArguments(
-        output_dir='training_bert-kan',
-        eval_strategy='epoch',
-        save_strategy='epoch',
-        num_train_epochs=30,
-        per_device_train_batch_size=16,
-        per_device_eval_batch_size=64,
-        logging_dir='logs',
-        logging_strategy='epoch',
+        output_dir=config.output_dir,
+        eval_strategy=config.eval_strategy,
+        save_strategy=config.save_strategy,
+        num_train_epochs=config.num_train_epochs,
+        per_device_train_batch_size=config.per_device_train_batch_size,
+        per_device_eval_batch_size=config.per_device_eval_batch_size,
+        logging_dir=config.logging_dir,
+        logging_strategy=config.logging_strategy,
         load_best_model_at_end=True
     )
 
+    # 创建训练器并配置
     trainer = Trainer(
         model=model,
         args=training_args,
@@ -160,10 +193,13 @@ def main():
         eval_dataset=tokenized_datasets["test"],
         tokenizer=tokenizer,
         compute_metrics=compute_metrics,
-        data_collator=custom_collate_fn  # 使用自定义 collate_fn
+        data_collator=custom_collate_fn  # 使用自定义的collate_fn
     )
 
+    # 启动训练过程
     trainer.train()
+
+    # 绘制训练历史指标
     plot_metrics(trainer.state.log_history)
 
 
