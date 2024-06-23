@@ -10,14 +10,13 @@ plt.switch_backend('agg')  # 设置matplotlib后端为agg，适用于非GUI环�
 
 
 class Config:
-    # 文件和模型配置
-    data_file = '3-data.csv'
-    encoding = 'gbk'
-    output_file = 'processed_3-data.csv'
-    output_dir = 'training_basic-bert'
+    data_file = '7-data.csv'
+    encoding = 'utf-8'
+    output_file = 'processed_7-data.csv'
+    output_dir = 'training_ocemotion-bert'
     model_path = 'model/bert-base-chinese'
     local_files_only = True
-    num_labels = 3
+    num_labels = 7
 
     # 训练参数配置
     eval_strategy = 'epoch'
@@ -34,11 +33,13 @@ class Config:
 
 def load_and_prepare_data(filename):
     """加载并预处理数据"""
-    df = pd.read_csv(filename, encoding=Config.encoding)
-    target_map = {'positive': 1, 'negative': 0, 'neutral': 2}
-    df['target'] = df['sentiment'].map(target_map)
-    prepared_df = df[['text', 'target']]
-    prepared_df.columns = ['sentence', 'label']
+    df = pd.read_csv(filename, encoding=Config.encoding, delimiter='\t', header=None, names=['id', 'sentence', 'label_str'])
+    target_map = {
+        'sadness': 0, 'happiness': 1, 'disgust': 2, 'anger': 3,
+        'like': 4, 'surprise': 5, 'fear': 6
+    }
+    df['label'] = df['label_str'].map(target_map)
+    prepared_df = df[['sentence', 'label']]
     prepared_df.to_csv(Config.output_file, index=False)
     return load_dataset('csv', data_files=Config.output_file)
 
