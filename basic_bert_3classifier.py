@@ -13,7 +13,7 @@ class Config:
     # 文件和模型配置
     data_file = '3-data.csv'
     encoding = 'gbk'
-    output_file = 'data.csv'
+    output_file = 'processed_3-data.csv'
     output_dir = 'training_basic-bert'
     model_path = 'model/bert-base-chinese'
     local_files_only = True
