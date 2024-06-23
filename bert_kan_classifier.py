@@ -8,23 +8,23 @@ from sklearn.metrics import f1_score
 from transformers import AutoTokenizer, Trainer, TrainingArguments, BertModel, \
     BertPreTrainedModel, DataCollatorWithPadding
 
-plt.switch_backend('agg')
+plt.switch_backend('agg')  # 设置matplotlib后端为agg，适用于非GUI环境
 
 
 class Config:
-    # 数据处理
+    # 文件和模型配置
     data_file = 'test.csv'
     encoding = 'gbk'
-    target_map = {'positive': 1, 'negative': 0, 'neutral': 2}
-
-    # 模型参数
+    output_file = 'data.csv'
+    output_dir = 'training_bert-kan'
     model_path = 'model/bert-base-chinese'
     local_files_only = True
     num_labels = 3
-    degree = 3
 
-    # 训练参数
-    output_dir = 'training_bert-kan'
+    # 数据标签映射
+    target_map = {'positive': 1, 'negative': 0, 'neutral': 2}
+
+    # 训练参数配置
     eval_strategy = 'epoch'
     save_strategy = 'epoch'
     num_train_epochs = 30
@@ -34,83 +34,68 @@ class Config:
     logging_strategy = 'epoch'
     test_size = 0.3
     random_seed = 42
+    degree = 3  # Chebyshev多项式的度数
 
 
 class ChebyshevKANLayer(nn.Module):
+    """Chebyshev多项式卷积层，用于在BERT模型上添加自定义层"""
     def __init__(self, input_dim, output_dim, degree):
         super(ChebyshevKANLayer, self).__init__()
         self.coeffs = nn.Parameter(torch.randn(output_dim, input_dim, degree + 1))
         self.degree = degree
 
     def forward(self, x):
-        x_norm = torch.tanh(x)  # [-1, 1]范围内的正则化
-        # 初始的多项式
-        Tx = [torch.ones_like(x_norm), x_norm]
+        x_norm = torch.tanh(x)  # 归一化处理
+        Tx = [torch.ones_like(x_norm), x_norm]  # 初始化多项式
         for n in range(2, self.degree + 1):
             Tx.append(2 * x_norm * Tx[-1] - Tx[-2])
-        T_stack = torch.stack(Tx, dim=-1)  # [batch_size, input_dim, degree+1]
-        T_stack = T_stack.permute(0, 2, 1)  # 调整为 [batch_size, degree+1, input_dim]
-
-        # 调整 self.coeffs 的形状以匹配 T_stack
-        coeffs_adjusted = self.coeffs.permute(0, 2, 1)  # [output_dim, degree+1, input_dim]
+        T_stack = torch.stack(Tx, dim=-1).permute(0, 2, 1)
+        coeffs_adjusted = self.coeffs.permute(0, 2, 1)
         logits = torch.einsum('bdi,odi->bo', T_stack, coeffs_adjusted)
         return logits
 
 
 class BertWithChebyshevKAN(BertPreTrainedModel):
-    """创建一个新的BERT模型类，将标准的输出层替换为KAN层"""
-
+    """BERT模型与Chebyshev KAN层结合"""
     def __init__(self, config, degree=3):
         super(BertWithChebyshevKAN, self).__init__(config)
-        self.num_labels = config.num_labels
         self.bert = BertModel(config)
-        self.kan_layer = ChebyshevKANLayer(config.hidden_size, self.num_labels, degree)
+        self.kan_layer = ChebyshevKANLayer(config.hidden_size, config.num_labels, degree)
 
     def forward(self, input_ids, attention_mask=None, token_type_ids=None, labels=None):
         outputs = self.bert(input_ids, attention_mask=attention_mask, token_type_ids=token_type_ids)
-        sequence_output = outputs[1]  # 使用CLS标记的输出
-        logits = self.kan_layer(sequence_output)
-
-        # 如果没有提供labels，直接返回logits
+        logits = self.kan_layer(outputs[1])
         if labels is None:
             return {'logits': logits}
-
-        # 如果提供了labels，计算并返回损失和logits
         loss_fct = nn.CrossEntropyLoss()
         loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1))
         return {'loss': loss, 'logits': logits}
 
 
-def load_and_prepare_data(filename):
-    """加载和预处理数据集"""
-    df = pd.read_csv(filename, encoding='gbk')
-    target_map = {'positive': 1, 'negative': 0, 'neutral': 2}
-    df['target'] = df['sentiment'].map(target_map)
+def load_and_prepare_data(filename, config):
+    """加载并预处理数据集"""
+    df = pd.read_csv(filename, encoding=config.encoding)
+    df['target'] = df['sentiment'].map(config.target_map)
     prepared_df = df[['text', 'target']]
     prepared_df.columns = ['sentence', 'label']
-    prepared_df.to_csv('data.csv', index=False)
-    return load_dataset('csv', data_files='data.csv')
+    prepared_df.to_csv(config.output_file, index=False)
+    return load_dataset('csv', data_files=config.output_file)
 
 
 def custom_collate_fn(batch):
+    """自定义collate函数以适配数据批处理"""
     tokenizer = AutoTokenizer.from_pretrained('model/bert-base-chinese', local_files_only=True)
     data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
-
-    # 此处我们假设 'batch' 是一个列表，其中包含多个字典，每个字典都有 'input_ids'、'attention_mask' 和 'label'
-    collated_data = data_collator(
-        [{"input_ids": item["input_ids"], "attention_mask": item["attention_mask"]} for item in batch])
+    collated_data = data_collator([{"input_ids": item["input_ids"], "attention_mask": item["attention_mask"]} for item in batch])
     labels = torch.tensor([item["label"] for item in batch], dtype=torch.long)
     collated_data['labels'] = labels
     return collated_data
 
 
-def tokenize_data(dataset, tokenizer):
-    """使用tokenizer对数据集进行处理"""
-
+def tokenize_data(dataset, tokenizer, config):
+    """使用tokenizer处理数据集"""
     def tokenize_fn(batch):
-        # 启用截断和填充确保所有序列长度一致
         return tokenizer(batch['sentence'], truncation=True, padding=True, max_length=512, return_tensors='pt')
-
     return dataset.map(tokenize_fn, batched=True)
 
 
@@ -123,8 +108,8 @@ def compute_metrics(eval_pred):
     return {'accuracy': acc, 'f1': f1}
 
 
-def plot_metrics(training_history):
-    """绘制训练过程中的指标变化"""
+def plot_metrics(training_history, output_dir):
+    """绘制训练过程中的性能指标"""
     eval_epochs = [x['epoch'] for x in training_history if 'eval_loss' in x]
     eval_accuracy = [x['eval_accuracy'] for x in training_history if 'eval_accuracy' in x]
     eval_f1 = [x['eval_f1'] for x in training_history if 'eval_f1' in x]
@@ -147,23 +132,19 @@ def plot_metrics(training_history):
     plt.legend()
 
     plt.tight_layout()
-    plt.savefig('training_bert-kan/metrics_plot.png')
+    plt.savefig(f'{output_dir}/metrics_plot.png')
     plt.close()
 
 
 def main():
-    # 初始化配置对象
+    """主执行函数"""
     config = Config()
-
-    # 加载和准备数据
-    raw_datasets = load_and_prepare_data(config.data_file)
+    raw_datasets = load_and_prepare_data(config.data_file, config)
     train_test_split = raw_datasets['train'].train_test_split(test_size=config.test_size, seed=config.random_seed)
 
-    # 初始化Tokenizer和处理数据
     tokenizer = AutoTokenizer.from_pretrained(config.model_path, local_files_only=config.local_files_only)
-    tokenized_datasets = tokenize_data(train_test_split, tokenizer)
+    tokenized_datasets = tokenize_data(train_test_split, tokenizer, config)
 
-    # 加载预训练模型并添加自定义层
     model = BertWithChebyshevKAN.from_pretrained(
         config.model_path,
         num_labels=config.num_labels,
@@ -171,7 +152,6 @@ def main():
         degree=config.degree
     )
 
-    # 配置训练参数
     training_args = TrainingArguments(
         output_dir=config.output_dir,
         eval_strategy=config.eval_strategy,
@@ -184,7 +164,6 @@ def main():
         load_best_model_at_end=True
     )
 
-    # 创建训练器并配置
     trainer = Trainer(
         model=model,
         args=training_args,
@@ -192,14 +171,11 @@ def main():
         eval_dataset=tokenized_datasets["test"],
         tokenizer=tokenizer,
         compute_metrics=compute_metrics,
-        data_collator=custom_collate_fn  # 使用自定义的collate_fn
+        data_collator=custom_collate_fn
     )
 
-    # 启动训练过程
     trainer.train()
-
-    # 绘制训练历史指标
-    plot_metrics(trainer.state.log_history)
+    plot_metrics(trainer.state.log_history, config.output_dir)
 
 
 if __name__ == "__main__":

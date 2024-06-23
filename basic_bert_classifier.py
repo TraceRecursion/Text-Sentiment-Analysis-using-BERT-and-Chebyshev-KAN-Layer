@@ -5,11 +5,11 @@ from datasets import load_dataset
 from sklearn.metrics import f1_score
 from transformers import AutoTokenizer, AutoModelForSequenceClassification, Trainer, TrainingArguments
 
-plt.switch_backend('agg')
+plt.switch_backend('agg')  # 设置matplotlib后端为agg，适用于非GUI环境
 
 
 class Config:
-    # 数据和文件配置
+    # 文件和模型配置
     data_file = 'test.csv'
     encoding = 'gbk'
     output_file = 'data.csv'
@@ -18,7 +18,7 @@ class Config:
     local_files_only = True
     num_labels = 3
 
-    # 训练配置
+    # 训练参数配置
     eval_strategy = 'epoch'
     save_strategy = 'epoch'
     num_train_epochs = 30
@@ -27,10 +27,11 @@ class Config:
     logging_dir = 'logs'
     logging_strategy = 'epoch'
     test_size = 0.3
-    seed = 42
+    random_seed = 42
 
 
 def load_and_prepare_data(filename):
+    """加载并预处理数据"""
     df = pd.read_csv(filename, encoding=Config.encoding)
     target_map = {'positive': 1, 'negative': 0, 'neutral': 2}
     df['target'] = df['sentiment'].map(target_map)
@@ -41,12 +42,14 @@ def load_and_prepare_data(filename):
 
 
 def tokenize_data(dataset, tokenizer):
+    """使用tokenizer对数据集进行处理"""
     def tokenize_fn(batch):
         return tokenizer(batch['sentence'], truncation=True, max_length=512)
     return dataset.map(tokenize_fn, batched=True)
 
 
 def compute_metrics(eval_pred):
+    """计算模型性能指标"""
     logits, labels = eval_pred
     predictions = np.argmax(logits, axis=-1)
     acc = np.mean(predictions == labels)
@@ -55,6 +58,7 @@ def compute_metrics(eval_pred):
 
 
 def plot_metrics(training_history):
+    """绘制训练过程中的性能指标"""
     eval_epochs = [x['epoch'] for x in training_history if 'eval_loss' in x]
     eval_accuracy = [x['eval_accuracy'] for x in training_history if 'eval_accuracy' in x]
     eval_f1 = [x['eval_f1'] for x in training_history if 'eval_f1' in x]
@@ -82,9 +86,10 @@ def plot_metrics(training_history):
 
 
 def main():
+    """主执行函数"""
     config = Config()
     raw_datasets = load_and_prepare_data(config.data_file)
-    train_test_split = raw_datasets['train'].train_test_split(test_size=config.test_size, seed=config.seed)
+    train_test_split = raw_datasets['train'].train_test_split(test_size=config.test_size, seed=config.random_seed)
 
     tokenizer = AutoTokenizer.from_pretrained(config.model_path, local_files_only=config.local_files_only)
     tokenized_datasets = tokenize_data(train_test_split, tokenizer)
