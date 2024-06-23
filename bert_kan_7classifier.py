@@ -13,17 +13,18 @@ plt.switch_backend('agg')  # 设置matplotlib后端为agg，适用于非GUI环�
 
 
 class Config:
-    # 文件和模型配置
-    data_file = '3-data.csv'
-    encoding = 'gbk'
-    output_file = 'processed_3-data.csv'
-    output_dir = 'training_bert-kan'
+    data_file = '7-data.csv'  # 新的数据文件名
+    encoding = 'utf-8'                # 假设新数据集使用 UTF-8 编码
+    output_file = 'processed_7-data.csv'
+    output_dir = 'training_bert-kan7'
     model_path = 'model/bert-base-chinese'
     local_files_only = True
-    num_labels = 3
+    num_labels = 7                    # 更新为七个标签
 
-    # 数据标签映射
-    target_map = {'positive': 1, 'negative': 0, 'neutral': 2}
+    target_map = {
+        'sadness': 0, 'happiness': 1, 'disgust': 2, 'anger': 3,
+        'like': 4, 'surprise': 5, 'fear': 6
+    }  # 新的标签映射
 
     # 训练参数配置
     eval_strategy = 'epoch'
@@ -77,10 +78,9 @@ class BertWithChebyshevKAN(BertPreTrainedModel):
 
 def load_and_prepare_data(filename, config):
     """加载并预处理数据集"""
-    df = pd.read_csv(filename, encoding=config.encoding)
-    df['target'] = df['sentiment'].map(config.target_map)
-    prepared_df = df[['text', 'target']]
-    prepared_df.columns = ['sentence', 'label']
+    df = pd.read_csv(filename, encoding=config.encoding, delimiter='\t', header=None, names=['id', 'sentence', 'label_str'])
+    df['label'] = df['label_str'].map(config.target_map)
+    prepared_df = df[['sentence', 'label']]
     prepared_df.to_csv(config.output_file, index=False)
     return load_dataset('csv', data_files=config.output_file)
 

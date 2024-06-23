@@ -17,7 +17,7 @@ class Config:
     data_file = '3-data.csv'
     encoding = 'gbk'
     output_file = 'processed_3-data.csv'
-    output_dir = 'training_bert-kan'
+    output_dir = 'training_bert-kan3'
     model_path = 'model/bert-base-chinese'
     local_files_only = True
     num_labels = 3

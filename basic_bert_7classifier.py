@@ -13,7 +13,7 @@ class Config:
     data_file = '7-data.csv'
     encoding = 'utf-8'
     output_file = 'processed_7-data.csv'
-    output_dir = 'training_ocemotion-bert'
+    output_dir = 'training_basic-bert7'
     model_path = 'model/bert-base-chinese'
     local_files_only = True
     num_labels = 7
