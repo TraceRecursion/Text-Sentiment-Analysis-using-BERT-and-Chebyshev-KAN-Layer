@@ -59,6 +59,7 @@ class BertWithChebyshevKAN(BertPreTrainedModel):
     """BERT模型与Chebyshev KAN层结合"""
     def __init__(self, config, degree=3):
         super(BertWithChebyshevKAN, self).__init__(config)
+        self.num_labels = config.num_labels  # 确保这行存在
         self.bert = BertModel(config)
         self.kan_layer = ChebyshevKANLayer(config.hidden_size, config.num_labels, degree)
 
