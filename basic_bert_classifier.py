@@ -7,6 +7,7 @@ from transformers import AutoTokenizer, AutoModelForSequenceClassification, Trai
 
 plt.switch_backend('agg')
 
+
 class Config:
     # 数据和文件配置
     data_file = 'test.csv'
@@ -28,6 +29,7 @@ class Config:
     test_size = 0.3
     seed = 42
 
+
 def load_and_prepare_data(filename):
     df = pd.read_csv(filename, encoding=Config.encoding)
     target_map = {'positive': 1, 'negative': 0, 'neutral': 2}
@@ -37,10 +39,12 @@ def load_and_prepare_data(filename):
     prepared_df.to_csv(Config.output_file, index=False)
     return load_dataset('csv', data_files=Config.output_file)
 
+
 def tokenize_data(dataset, tokenizer):
     def tokenize_fn(batch):
         return tokenizer(batch['sentence'], truncation=True, max_length=512)
     return dataset.map(tokenize_fn, batched=True)
+
 
 def compute_metrics(eval_pred):
     logits, labels = eval_pred
@@ -48,6 +52,7 @@ def compute_metrics(eval_pred):
     acc = np.mean(predictions == labels)
     f1 = f1_score(labels, predictions, average='macro')
     return {'accuracy': acc, 'f1': f1}
+
 
 def plot_metrics(training_history):
     eval_epochs = [x['epoch'] for x in training_history if 'eval_loss' in x]
@@ -74,6 +79,7 @@ def plot_metrics(training_history):
     plt.tight_layout()
     plt.savefig(f'{Config.output_dir}/metrics_plot.png')
     plt.close()
+
 
 def main():
     config = Config()
@@ -109,6 +115,7 @@ def main():
 
     trainer.train()
     plot_metrics(trainer.state.log_history)
+
 
 if __name__ == "__main__":
     main()

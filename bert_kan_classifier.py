@@ -8,7 +8,6 @@ from sklearn.metrics import f1_score
 from transformers import AutoTokenizer, Trainer, TrainingArguments, BertModel, \
     BertPreTrainedModel, DataCollatorWithPadding
 
-
 plt.switch_backend('agg')
 
 
