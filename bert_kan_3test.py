@@ -1,6 +1,6 @@
 import torch
 from transformers import AutoTokenizer
-from bert_kan_classifier import BertWithChebyshevKAN
+from bert_kan_3classifier import BertWithChebyshevKAN
 
 # 加载模型和标记器
 model = BertWithChebyshevKAN.from_pretrained('./training_bert-kan/checkpoint-6690', num_labels=3, degree=3)
