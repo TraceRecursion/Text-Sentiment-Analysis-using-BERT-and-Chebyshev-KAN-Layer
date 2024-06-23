@@ -14,7 +14,7 @@ plt.switch_backend('agg')  # 设置matplotlib后端为agg，适用于非GUI环�
 
 class Config:
     # 文件和模型配置
-    data_file = 'test.csv'
+    data_file = '3-data.csv'
     encoding = 'gbk'
     output_file = 'data.csv'
     output_dir = 'training_bert-kan'
