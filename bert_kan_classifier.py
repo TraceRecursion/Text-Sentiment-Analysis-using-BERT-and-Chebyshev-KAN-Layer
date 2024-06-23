@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
+from datetime import datetime
 from datasets import load_dataset
 from sklearn.metrics import f1_score
 from transformers import AutoTokenizer, Trainer, TrainingArguments, BertModel, \
@@ -30,7 +31,8 @@ class Config:
     num_train_epochs = 30
     per_device_train_batch_size = 16
     per_device_eval_batch_size = 64
-    logging_dir = 'logs'
+    current_time = datetime.now().strftime("%Y%m%d-%H%M%S")
+    log_dir = f"logs/{current_time}"
     logging_strategy = 'epoch'
     test_size = 0.3
     random_seed = 42
@@ -160,7 +162,7 @@ def main():
         num_train_epochs=config.num_train_epochs,
         per_device_train_batch_size=config.per_device_train_batch_size,
         per_device_eval_batch_size=config.per_device_eval_batch_size,
-        logging_dir=config.logging_dir,
+        logging_dir=config.log_dir,
         logging_strategy=config.logging_strategy,
         load_best_model_at_end=True
     )
