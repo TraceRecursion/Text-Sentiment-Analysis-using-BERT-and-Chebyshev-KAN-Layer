@@ -3,11 +3,11 @@ from transformers import AutoTokenizer
 from bert_kan_3classifier import BertWithChebyshevKAN
 
 # 加载模型和标记器
-model = BertWithChebyshevKAN.from_pretrained('./training_bert-kan/checkpoint-6690', num_labels=3, degree=3)
+model = BertWithChebyshevKAN.from_pretrained('./training_bert-kan3/checkpoint-6690', num_labels=3, degree=3)
 tokenizer = AutoTokenizer.from_pretrained('model/bert-base-chinese', local_files_only=True)
 
 # 准备输入文本
-text = "非洲很难，手机充电都是问题，白天和一堆人挤着用水，床可能都没有，睡地铺"
+text = "把海弄干的鱼在海干前上了陆地，从一片黑暗森林奔向另一片黑暗森林。"
 encoded_input = tokenizer(text, return_tensors='pt', padding=True, truncation=True, max_length=512)
 
 # 预测
